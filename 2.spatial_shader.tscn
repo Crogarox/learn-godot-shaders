@@ -1,0 +1,74 @@
+[gd_scene load_steps=8 format=2]
+
+[sub_resource type="Shader" id=2]
+code = "shader_type spatial;
+
+// I don't want to have lights affect an object, unshaded.
+//render_mode unshaded;
+// I want to use toon shading instead of more-realistic PBR shading.
+render_mode diffuse_toon, specular_toon;
+
+uniform vec3 albedo : hint_vec3 = vec3(0.1, 0.3, 0.5);
+uniform sampler2D noise;
+uniform float height_scale = 0.5;
+uniform sampler2D normalmap;
+varying vec2 tex_position;
+
+void vertex()
+{
+	// For the position on the texture.
+	// We use the x and z channels of VERTEX to determine where on the texture to look up.
+	// Note that the PlaneMesh coordinates are within the [-1,1] range (for a size of 2),
+	// while the texture coordinates are within [0,1].
+	// So to normalize we divide by the size of the PlaneMesh 2.0 and add 0.5. 
+	tex_position = VERTEX.xz / 2.0 + 0.5;
+	// access the noise texture using the texture() function.
+	float height = texture(noise, tex_position).x;
+	VERTEX.y += height * height_scale;
+}
+
+void fragment()
+{
+	float fresnel = sqrt(1.0 - dot(NORMAL, VIEW));
+	NORMALMAP = texture(normalmap, tex_position).xyz;
+	ALBEDO = albedo + (0.1 * fresnel); // base color
+	// Think of METALLIC as changing the balance between the reflection and the ALBEDO color
+	// high METALLIC almost ignores ALBEDO altogether, and looks like a mirror of the sky.
+	// While a low METALLIC has a more equal representation of sky color and ALBEDO color.
+	METALLIC = 0.0; // specifies how much like a metal the object is.
+	ROUGHNESS = 0.01 * (1.0 - fresnel); // specifies how smooth/rough the surface of a material is. 
+	RIM = 0.2;
+}"
+
+[sub_resource type="OpenSimplexNoise" id=4]
+
+[sub_resource type="NoiseTexture" id=5]
+noise = SubResource( 4 )
+
+[sub_resource type="OpenSimplexNoise" id=6]
+
+[sub_resource type="NoiseTexture" id=7]
+as_normalmap = true
+noise = SubResource( 6 )
+
+[sub_resource type="ShaderMaterial" id=3]
+shader = SubResource( 2 )
+shader_param/albedo = Vector3( 0.001, 0.003, 0.005 )
+shader_param/height_scale = 0.5
+shader_param/noise = SubResource( 5 )
+shader_param/normalmap = SubResource( 7 )
+
+[sub_resource type="PlaneMesh" id=1]
+material = SubResource( 3 )
+subdivide_width = 32
+subdivide_depth = 32
+
+[node name="Spatial" type="Spatial"]
+
+[node name="MeshInstance" type="MeshInstance" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0.113095, -0.0220246, -0.783815 )
+mesh = SubResource( 1 )
+material/0 = null
+
+[node name="DirectionalLight" type="DirectionalLight" parent="."]
+transform = Transform( 1, 0, 0, 0, -0.630337, 0.776322, 0, -0.776322, -0.630337, 1.39829, 1.86828, -2.0833 )
